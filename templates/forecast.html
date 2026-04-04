@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>📈 Future Health Prediction</h1>
+
+<p style="color:#64748b;">
+    Predicting future weight trends using ARIMA time-series modeling.
+</p>
+<div class="card">
+    <h3>📊 What this graph shows</h3>
+    <p>
+        🔵 Past weight trend based on your calorie intake.<br>
+        🔴 Predicted future weight using ARIMA forecasting.<br><br>
+        This helps you understand how your current eating habits
+        may affect your weight over time.
+    </p>
+</div>
+{% if plot %}
+<div class="card">
+    {{ plot|safe }}
+</div>
+{% endif %}
+
+{% if insight %}
+<div class="card">
+    <h3>🔮 Prediction Insight</h3>
+    <p>{{ insight }}</p>
+</div>
+{% endif %}
+
+{% if dataset_insight %}
+<div class="card">
+    <h3>📊 Nutrition Insight</h3>
+    <p>{{ dataset_insight }}</p>
+</div>
+{% endif %}
+
+<div class="card">
+    <h4>ℹ️ About this feature</h4>
+    <p>
+        This module uses time-series forecasting (ARIMA) to predict future health trends
+        based on simulated daily calorie intake and weight changes.
+    </p>
+</div>
+<form method="POST" enctype="multipart/form-data">
+    <input type="file" name="file" required>
+    <button type="submit">Upload & Predict</button>
+</form>
+<div class="card">
+    <h3>🔮 Insight</h3>
+    <p>
+        If your current intake continues, your weight is expected to
+        increase slightly. Consider reducing calorie intake.
+    </p>
+</div>
+
+{% endblock %}

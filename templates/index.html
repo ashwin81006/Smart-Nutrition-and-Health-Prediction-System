@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>🥗 Food Health Scanner</h1>
+<p style="color:#64748b;">Enter a product name or nutrition facts – get instant health grade, explanation, and
+    recommendations.</p>
+
+<div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+    <!-- Left: Search product -->
+    <div style="flex: 1; min-width: 250px;">
+        <div class="card">
+            <h3>🔍 Search product</h3>
+            <form method="POST">
+                <select name="product_name" style="width:100%;">
+                    {% for name in product_names[:500] %}
+                    <option value="{{ name }}">{{ name[:60] }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" name="search_product" class="btn-primary"
+                    style="margin-top:0.5rem;">Analyze</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Right: Manual input -->
+    <div style="flex: 2; min-width: 300px;">
+        <div class="card">
+            <h3>✏️ Manual nutrition input</h3>
+            <form method="POST">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <input type="number" step="any" name="energy" placeholder="Energy (kJ/100g)" required>
+                    <input type="number" step="any" name="fat" placeholder="Fat (g/100g)" required>
+                    <input type="number" step="any" name="sat_fat" placeholder="Saturated fat (g/100g)" required>
+                    <input type="number" step="any" name="carbs" placeholder="Carbohydrates (g/100g)" required>
+                    <input type="number" step="any" name="sugars" placeholder="Sugars (g/100g)" required>
+                    <input type="number" step="any" name="fiber" placeholder="Fiber (g/100g)" required>
+                    <input type="number" step="any" name="protein" placeholder="Protein (g/100g)" required>
+                    <input type="number" step="any" name="salt" placeholder="Salt (g/100g)" required>
+                    <input type="number" name="additives_n" placeholder="Number of additives" required>
+                    <select name="is_processed">
+                        <option>No</option>
+                        <option>Yes</option>
+                    </select>
+                </div>
+                <textarea name="ingr_text"
+                    placeholder="Ingredients list (optional) – e.g., sugar, flour, palm oil, e202..." rows="2"
+                    style="width:100%; margin-top:0.5rem;"></textarea>
+                <button type="submit" name="manual_input" class="btn-primary"
+                    style="margin-top:0.5rem;">Analyze</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if result %}
+<!-- RESULTS SECTION -->
+<div class="card" style="margin-top: 1.5rem;">
+    <h2>📊 Analysis Result</h2>
+
+    <!-- Grade & health status -->
+    <div style="text-align: center; margin-bottom: 1.5rem;">
+        <div class="grade-display grade-{{ result.grade }}">
+            {{ result.grade.upper() }}
+        </div>
+        <div style="font-size: 1.5rem;">{{ result.grade_label }}</div>
+        <div style="font-size: 1.2rem;">{{ result.health_status }}</div>
+    </div>
+
+    <!-- Processed detection -->
+    <div style="margin-bottom: 1rem;">
+        <strong>⚠️ Processed food detection:</strong> {{ result.processed_label }}
+    </div>
+
+    <!-- Smart Explanation -->
+    <h3>🧠 Why this grade?</h3>
+    <ul>
+        {% for reason in result.reasons %}
+        <li>{{ reason }}</li>
+        {% endfor %}
+    </ul>
+
+    <!-- Ingredient Analyzer (if ingredients available) -->
+    {% if result.ingredient_count > 0 %}
+    <h3>🔬 Ingredient Analyzer</h3>
+    <p><strong>Total ingredients:</strong> {{ result.ingredient_count }}</p>
+    <p><strong>Additives detected:</strong> {{ result.additive_count }}
+        {% if result.additives %}
+        ({{ result.additives|join(', ') }})
+        {% else %}
+        – no concerning additives found
+        {% endif %}
+    </p>
+    {% if result.additive_count > 3 %}
+    <div class="alert-warn">⚠️ High number of additives → highly processed</div>
+    {% endif %}
+    {% endif %}
+
+    <!-- Smart Recommendations (only for search, not manual) -->
+    {% if result.type == 'search' and result.recommendations %}
+    <h3>💡 Healthier alternatives</h3>
+    <table style="width:100%; border-collapse:collapse;">
+        <tr>
+            <th>Product</th>
+            <th>Grade</th>
+            <th>Energy</th>
+            <th>Protein</th>
+            <th>Sugars</th>
+        </tr>
+        {% for rec in result.recommendations %}
+        <tr>
+            <td>{{ rec.product_name }}</td>
+            <td class="grade-{{ rec.nutrition_grade_fr }}">{{ rec.nutrition_grade_fr.upper() }}</td>
+            <td>{{ rec.energy_100g|round(0) }} kJ</td>
+            <td>{{ rec.proteins_100g|round(1) }} g</td>
+            <td>{{ rec.sugars_100g|round(1) }} g</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% elif result.type == 'search' %}
+    <div class="alert-good">🎉 This product already has an excellent grade! No improvement needed.</div>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+    <h3>🎯 What should you do?</h3>
+    {% if result.grade in ['d','e'] %}
+    <div class="alert-warn">
+        ⚠️ Try reducing sugar and fat intake. Consider switching to high-fiber foods.
+    </div>
+    {% elif result.grade == 'c' %}
+    <div class="alert-warn">
+        ⚖️ Moderate food. Limit frequent consumption.
+    </div>
+    {% else %}
+    <div class="alert-good">
+        🎉 Great choice! You can safely include this in your diet.
+    </div>
+    {% endif %}
+</div>
+
+
+<div class="card">
+    <h3>🤖 AI Health Assistant</h3>
+
+    <p><strong>💡 Summary:</strong></p>
+    <p>
+        This food is
+        <strong>{{ result.grade_label }}</strong>
+        and is considered
+        <strong>{{ result.health_status }}</strong>.
+    </p>
+
+    <p><strong>📌 Recommendation:</strong></p>
+    {% if result.grade in ['d','e'] %}
+    <div class="alert-warn">
+        Avoid frequent consumption. Try foods with lower sugar and fat.
+    </div>
+    {% elif result.grade == 'c' %}
+    <div class="alert-warn">
+        Consume occasionally. Balance with high-fiber foods.
+    </div>
+    {% else %}
+    <div class="alert-good">
+        Great choice! Safe for regular consumption.
+    </div>
+    {% endif %}
+</div>
+
+<!-- Optional: Quick reference guide -->
+<div class="card" style="margin-top: 1rem; text-align: center;">
+    <h4>📖 Health score guide</h4>
+    <div style="display: flex; justify-content: space-around; flex-wrap: wrap;">
+        <div><span style="color:#22c55e;">A</span> → Excellent 🟢</div>
+        <div><span style="color:#84cc16;">B</span> → Good 🟢</div>
+        <div><span style="color:#eab308;">C</span> → Moderate 🟡</div>
+        <div><span style="color:#f97316;">D</span> → Poor 🔴</div>
+        <div><span style="color:#ef4444;">E</span> → Very Poor 🔴</div>
+    </div>
+</div>
+
+{% endblock %}

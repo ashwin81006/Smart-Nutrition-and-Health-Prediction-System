@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NutriScan AI</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f1f5f9;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .grade-display {
+            font-size: 3rem;
+            font-weight: 900;
+        }
+
+        /* Colors are already defined for .grade-a, .grade-b, etc. */
+        .grade-display.grade-a {
+            color: #22c55e;
+        }
+
+        .grade-display.grade-b {
+            color: #84cc16;
+        }
+
+        .grade-display.grade-c {
+            color: #eab308;
+        }
+
+        .grade-display.grade-d {
+            color: #f97316;
+        }
+
+        .grade-display.grade-e {
+            color: #ef4444;
+        }
+
+        .alert-warn {
+            background: #422006;
+            border: 1px solid #f97316;
+            border-radius: 10px;
+            padding: 0.7rem;
+            color: #fdba74;
+            margin: 0.5rem 0;
+        }
+
+        .alert-good {
+            background: #052e16;
+            border: 1px solid #22c55e;
+            border-radius: 10px;
+            padding: 0.7rem;
+            color: #86efac;
+            margin: 0.5rem 0;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 260px;
+            height: 100%;
+            background: #0b1120;
+            border-right: 1px solid #334155;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            margin-left: 280px;
+            padding: 2rem;
+        }
+
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 1.2rem;
+            margin-bottom: 1rem;
+        }
+
+        .grade-a {
+            background: #16a34a;
+            color: #fff;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-weight: 700;
+        }
+
+        .grade-b {
+            background: #65a30d;
+            color: #fff;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-weight: 700;
+        }
+
+        .grade-c {
+            background: #ca8a04;
+            color: #fff;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-weight: 700;
+        }
+
+        .grade-d {
+            background: #ea580c;
+            color: #fff;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-weight: 700;
+        }
+
+        .grade-e {
+            background: #dc2626;
+            color: #fff;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-weight: 700;
+        }
+
+        .kpi-box {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 14px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .kpi-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #22c55e;
+        }
+
+        .kpi-label {
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+
+        .btn-primary {
+            background: #22c55e;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+        }
+
+        input,
+        select,
+        textarea {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #f1f5f9;
+            border-radius: 8px;
+            padding: 0.5rem;
+            width: 100%;
+            margin-bottom: 0.8rem;
+        }
+
+        label {
+            color: #94a3b8;
+            font-size: 0.85rem;
+        }
+
+        hr {
+            border-color: #334155;
+        }
+
+        a.nav-link {
+            display: block;
+            padding: 0.5rem;
+            color: #94a3b8;
+            text-decoration: none;
+            border-radius: 10px;
+            margin-bottom: 0.3rem;
+        }
+
+        a.nav-link:hover {
+            background: #1e293b;
+            color: #f1f5f9;
+        }
+
+        .alert-good {
+            background: #052e16;
+            border: 1px solid #22c55e;
+            border-radius: 10px;
+            padding: 0.7rem;
+            color: #86efac;
+        }
+
+        .alert-warn {
+            background: #422006;
+            border: 1px solid #f97316;
+            border-radius: 10px;
+            padding: 0.7rem;
+            color: #fdba74;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar">
+        <div style="text-align:center; margin-bottom:1rem;">
+            <div style="font-size:2.4rem;">🧬</div>
+            <div style="font-size:1.25rem; font-weight:800;">NutriScan AI</div>
+            <div style="font-size:0.75rem; color:#64748b;">Nutrition Intelligence</div>
+        </div>
+        <hr>
+        <a href="/" class="nav-link">🤖 AI Assistant</a>
+        <a href="/insights" class="nav-link">📊 Dataset Insights</a>
+        <a href="/compare" class="nav-link">⚖️ Compare</a>
+        <a href="/forecast" class="nav-link">📈 Prediction</a>
+        <hr>
+        <div style="font-size:0.7rem; color:#475569; margin-top:2rem;">
+            Powered by Scikit-learn · RandomForest<br>
+            Dataset: Open Food Facts
+        </div>
+    </div>
+    <div class="main-content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+
+</html>
