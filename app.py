@@ -35,7 +35,7 @@ FEATURE_COLS = [
 PROCESSED_FEATURE_COLS = [
     "energy_100g", "fat_100g", "saturated_fat_100g",
     "carbohydrates_100g", "sugars_100g", "fiber_100g",
-    "proteins_100g", "salt_100g", "additives_n",
+    "proteins_100g", "salt_100g",
 ]
 
 ADDITIVE_KEYWORDS = [
@@ -118,38 +118,17 @@ def color_for_grade(g):
 # DATA LOADING & MODEL TRAINING (cached globally)
 # -------------------------------
 def load_and_train():
-    # Use default dataset or generate synthetic if not found
+    # Load real dataset only – no synthetic fallback
     if not os.path.exists("cleaned_food_data.csv"):
-        print("⚠️ cleaned_food_data.csv not found. Generating synthetic dataset...")
-        np.random.seed(42)
-        n_samples = 5000
-        grades = np.random.choice(['a','b','c','d','e'], n_samples, p=[0.2,0.3,0.25,0.15,0.1])
-        df = pd.DataFrame({
-            "product_name": [f"Product_{i}" for i in range(n_samples)],
-            "nutrition_grade_fr": grades,
-            "energy_100g": np.random.uniform(200, 2500, n_samples),
-            "fat_100g": np.random.uniform(0, 50, n_samples),
-            "saturated_fat_100g": np.random.uniform(0, 20, n_samples),
-            "carbohydrates_100g": np.random.uniform(0, 80, n_samples),
-            "sugars_100g": np.random.uniform(0, 60, n_samples),
-            "fiber_100g": np.random.uniform(0, 20, n_samples),
-            "proteins_100g": np.random.uniform(0, 30, n_samples),
-            "salt_100g": np.random.uniform(0, 5, n_samples),
-            "additives_n": np.random.poisson(2, n_samples),
-            "is_processed": np.random.choice([0,1], n_samples, p=[0.6,0.4]),
-            "ingredients_text": ["sugar, flour, oil"] * n_samples,
-        })
-        # Add grade-based correlations
-        df.loc[df.nutrition_grade_fr=='a', 'sugars_100g'] *= 0.3
-        df.loc[df.nutrition_grade_fr=='e', 'sugars_100g'] *= 2
-    else:
-        df = pd.read_csv("cleaned_food_data.csv", low_memory=False)
-        df["product_name"] = df["product_name"].astype(str).fillna("Unknown product")
-        df["nutrition_grade_fr"] = df["nutrition_grade_fr"].str.lower().str.strip()
-        df = df[df["nutrition_grade_fr"].isin(["a","b","c","d","e"])]
-
-
-
+        raise FileNotFoundError(
+            "❌ cleaned_food_data.csv not found! "
+            "Please place your real dataset in the app directory."
+        )
+    
+    df = pd.read_csv("cleaned_food_data.csv", low_memory=False)
+    df["product_name"] = df["product_name"].astype(str).fillna("Unknown product")
+    df["nutrition_grade_fr"] = df["nutrition_grade_fr"].str.lower().str.strip()
+    df = df[df["nutrition_grade_fr"].isin(["a","b","c","d","e"])]
 
     # Derive features if not present
     for col in FEATURE_COLS:
@@ -195,19 +174,19 @@ def load_and_train():
         Xp, yp, test_size=0.2, random_state=42, stratify=yp
     )
 
-    # Logistic Regression pipeline
+    # Logistic Regression pipeline (with C=0.5 to reduce overfitting)
     lr_pipeline = Pipeline([
         ("scaler", StandardScaler()),
-        ("clf", LogisticRegression(max_iter=500, class_weight="balanced", random_state=42)),
+        ("clf", LogisticRegression(max_iter=500, class_weight="balanced", C=0.5, random_state=42)),
     ])
     lr_pipeline.fit(Xp_train, yp_train)
     lr_acc = accuracy_score(yp_test, lr_pipeline.predict(Xp_test))
     lr_f1  = f1_score(yp_test, lr_pipeline.predict(Xp_test), average="weighted")
 
-    # Decision Tree pipeline
+    # Decision Tree pipeline (max_depth=5 to reduce overfitting)
     dt_pipeline = Pipeline([
         ("scaler", StandardScaler()),
-        ("clf", DecisionTreeClassifier(max_depth=8, class_weight="balanced", random_state=42)),
+        ("clf", DecisionTreeClassifier(max_depth=5, class_weight="balanced", random_state=42)),
     ])
     dt_pipeline.fit(Xp_train, yp_train)
     dt_acc = accuracy_score(yp_test, dt_pipeline.predict(Xp_test))
@@ -226,6 +205,7 @@ all_product_names = sorted(df["product_name"].dropna().unique())
 avg_energy = df["energy_100g"].mean()
 avg_sugar = df["sugars_100g"].mean()
 avg_fat = df["fat_100g"].mean()
+
 # -------------------------------
 # FLASK ROUTES
 # -------------------------------
@@ -256,8 +236,13 @@ def insights():
                       title="Sugar vs Fat by Grade")
     fig3.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(30,41,59,0.2)", font_color="#f1f5f9")
     plot3_html = fig3.to_html(full_html=False)
-
-    avg_nutrients = df.groupby("nutrition_grade_fr")[["proteins_100g","fiber_100g","sugars_100g","fat_100g"]].mean().reset_index()
+    df_clean = df[
+        (df["fiber_100g"] < 100) &
+        (df["proteins_100g"] < 100) &
+        (df["sugars_100g"] < 100) &
+        (df["fat_100g"] < 100)
+    ]
+    avg_nutrients = df_clean.groupby("nutrition_grade_fr")[["proteins_100g","fiber_100g","sugars_100g","fat_100g"]].mean().reset_index()
     fig4 = go.Figure()
     nutrient_colors = {"proteins_100g":"#22c55e","fiber_100g":"#84cc16","sugars_100g":"#eab308","fat_100g":"#ef4444"}
     for nut, col in nutrient_colors.items():
@@ -633,20 +618,33 @@ def prediction():
             dt_proba = dt_proc_model.predict_proba(input_vec)[0]
             dt_conf  = float(dt_proba[dt_pred]) * 100
 
-            # Ensemble vote
-            votes = lr_pred + dt_pred        # 0 = Natural twice, 2 = Processed twice, 1 = split
-            if votes >= 2:
+            # ── Explanation reasons (NEW) ──
+            reasons = []
+            if sugars > 15:
+                reasons.append("🍬 High sugar content (>15g) – often indicates processing")
+            if additives_n > 3:
+                reasons.append("⚗️ More than 3 additives – typical for industrial foods")
+            if fiber < 2:
+                reasons.append("🌾 Low fiber (<2g) – suggests refined/processed ingredients")
+            if fat > 20:
+                reasons.append("🥑 High fat (>20g) – common in processed products")
+            if not reasons:
+                reasons.append("✅ Based on these values, the food looks minimally processed")
+
+            # ── Weighted ensemble (60% LR + 40% DT) ──
+            lr_proc_prob = lr_proba[1]   # probability of class 1 (Processed)
+            dt_proc_prob = dt_proba[1]   # probability of class 1 (Processed)
+            ensemble_score = lr_proc_prob * 0.6 + dt_proc_prob * 0.4
+            ensemble_threshold = 0.5
+
+            if ensemble_score >= ensemble_threshold:
                 ensemble = "Processed"
                 ensemble_icon = "🏭"
                 ensemble_color = "#ef4444"
-            elif votes == 0:
+            else:
                 ensemble = "Natural / Minimally Processed"
                 ensemble_icon = "🌿"
                 ensemble_color = "#22c55e"
-            else:
-                ensemble = "Uncertain – Models Disagree"
-                ensemble_icon = "⚠️"
-                ensemble_color = "#eab308"
 
             result = {
                 "lr_label":   "Processed" if lr_pred == 1 else "Natural",
@@ -662,6 +660,7 @@ def prediction():
                 "ensemble":        ensemble,
                 "ensemble_icon":   ensemble_icon,
                 "ensemble_color":  ensemble_color,
+                "reasons":         reasons,          # <-- explanation added
                 # Input echo
                 "energy":      energy,  "fat": fat, "sat_fat": sat_fat,
                 "carbs":       carbs,   "sugars": sugars, "fiber": fiber,
