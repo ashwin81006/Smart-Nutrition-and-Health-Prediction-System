@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  /* ── page-level overrides ── */
+  .pred-hero {
+    background: linear-gradient(135deg, #1a1040 0%, #0f172a 60%, #12273f 100%);
+    border: 1px solid #334155;
+    border-radius: 20px;
+    padding: 2rem 2.5rem 1.5rem;
+    margin-bottom: 1.8rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .pred-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 70% 30%, rgba(99,102,241,.18) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .pred-hero h1 { font-size: 2rem; font-weight: 900; margin: 0 0 .4rem; }
+  .pred-hero p  { color: #94a3b8; margin: 0; font-size: .95rem; }
+
+  /* model metric pills */
+  .model-metrics {
+    display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.8rem;
+  }
+  .metric-pill {
+    flex: 1; min-width: 160px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 14px;
+    padding: 1rem 1.2rem;
+    text-align: center;
+  }
+  .metric-pill .mp-badge {
+    font-size: .7rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; padding: 2px 10px; border-radius: 20px;
+    margin-bottom: .5rem; display: inline-block;
+  }
+  .lr-badge  { background: #312e81; color: #a5b4fc; }
+  .dt-badge  { background: #4c1d95; color: #d8b4fe; }
+  .metric-pill .mp-val { font-size: 1.6rem; font-weight: 800; }
+  .metric-pill .mp-lbl { font-size: .75rem; color: #64748b; }
+
+  /* form grid */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+  .form-group { display: flex; flex-direction: column; }
+  .form-group label {
+    font-size: .78rem; color: #94a3b8; margin-bottom: .3rem; font-weight: 600;
+  }
+  .form-group input {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    color: #f1f5f9;
+    padding: .55rem .8rem;
+    font-size: .95rem;
+    transition: border-color .2s;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 0;
+  }
+  .form-group input:focus { border-color: #6366f1; outline: none; }
+
+  .btn-predict {
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: .75rem 2.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .2s, transform .15s;
+    margin-top: 1.4rem;
+  }
+  .btn-predict:hover { opacity: .85; transform: translateY(-2px); }
+
+  /* result cards */
+  .results-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  @media (max-width: 700px) { .results-grid { grid-template-columns: 1fr; } }
+
+  .result-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 16px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .result-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: .06;
+    background: var(--accent);
+    pointer-events: none;
+  }
+
+  .rc-model-name {
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; margin-bottom: .7rem;
+  }
+  .rc-verdict {
+    font-size: 1.55rem; font-weight: 900; margin-bottom: .5rem;
+  }
+  .rc-conf-label { font-size: .8rem; color: #64748b; margin-bottom: .25rem; }
+  .conf-bar-track {
+    background: #0f172a;
+    border-radius: 20px;
+    height: 10px;
+    overflow: hidden;
+    margin-bottom: .9rem;
+  }
+  .conf-bar-fill {
+    height: 100%;
+    border-radius: 20px;
+    transition: width 1s ease;
+  }
+  .rc-stats { display: flex; gap: 1.2rem; }
+  .rc-stat { font-size: .8rem; color: #94a3b8; }
+  .rc-stat strong { color: #f1f5f9; }
+
+  /* ensemble verdict */
+  .ensemble-card {
+    background: linear-gradient(135deg, #1a1040 0%, #0f172a 70%);
+    border-radius: 20px;
+    padding: 2rem;
+    text-align: center;
+    border: 2px solid var(--ens-color);
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .ensemble-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 50%, var(--ens-color) 0%, transparent 65%);
+    opacity: .08;
+    pointer-events: none;
+  }
+  .ens-icon { font-size: 3.5rem; margin-bottom: .5rem; line-height: 1; }
+  .ens-label { font-size: 2rem; font-weight: 900; color: var(--ens-color); }
+  .ens-sub { color: #94a3b8; font-size: .9rem; margin-top: .4rem; }
+
+  /* input echo table */
+  .echo-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  .echo-table th { text-align: left; color: #64748b; font-weight: 600; padding: .4rem .6rem; }
+  .echo-table td { color: #f1f5f9; padding: .4rem .6rem; border-top: 1px solid #1e293b; }
+
+  /* section title */
+  .section-title {
+    font-size: 1.15rem; font-weight: 800; margin: 1.6rem 0 .8rem;
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .section-title span { font-size: 1.3rem; }
+</style>
+
+<!-- ╔══════════ HERO ══════════╗ -->
+<div class="pred-hero">
+  <h1>🔬 Processed Food Predictor</h1>
+  <p>Enter a food item's nutritional values to classify it as <strong>Processed</strong> or <strong>Natural</strong>
+     using Logistic Regression and a Decision Tree — then see how the two models agree.</p>
+</div>
+
+<!-- ╔══ MODEL ACCURACY PILLS ══╗ -->
+<div class="model-metrics">
+  <div class="metric-pill">
+    <div class="mp-badge lr-badge">Logistic Regression</div>
+    <div class="mp-val" style="color:#818cf8;">{{ lr_acc }}%</div>
+    <div class="mp-lbl">Accuracy on test set</div>
+  </div>
+  <div class="metric-pill">
+    <div class="mp-badge lr-badge">Logistic Regression</div>
+    <div class="mp-val" style="color:#818cf8;">{{ lr_f1 }}</div>
+    <div class="mp-lbl">Weighted F1-score</div>
+  </div>
+  <div class="metric-pill">
+    <div class="mp-badge dt-badge">Decision Tree</div>
+    <div class="mp-val" style="color:#c084fc;">{{ dt_acc }}%</div>
+    <div class="mp-lbl">Accuracy on test set</div>
+  </div>
+  <div class="metric-pill">
+    <div class="mp-badge dt-badge">Decision Tree</div>
+    <div class="mp-val" style="color:#c084fc;">{{ dt_f1 }}</div>
+    <div class="mp-lbl">Weighted F1-score</div>
+  </div>
+</div>
+
+<!-- ╔══ INPUT FORM ══╗ -->
+<div class="card">
+  <div class="section-title"><span>📋</span> Enter Nutritional Values (per 100 g)</div>
+  <form method="POST" id="predForm">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>🔥 Energy (kJ)</label>
+        <input type="number" name="energy" id="energy" step="0.1" min="0" placeholder="e.g. 1800"
+               value="{{ result.energy if result and not result.error else '' }}">
+      </div>
+      <div class="form-group">
+        <label>🥑 Fat (g)</label>
+        <input type="number" name="fat" id="fat" step="0.01" min="0" placeholder="e.g. 12.5"
+               value="{{ result.fat if result and not result.error else '' }}">
+      </div>
+      <div class="form-group">
+        <label>🥓 Saturated Fat (g)</label>
+        <input type="number" name="sat_fat" id="sat_fat" step="0.01" min="0" placeholder="e.g. 4.2"
+               value="{{ result.sat_fat if result and not result.error else '' }}">
+      </div>
+      <div class="form-group">
+        <label>🍞 Carbohydrates (g)</label>
+        <input type="number" name="carbs" id="carbs" step="0.01" min="0" placeholder="e.g. 45"
+               value="{{ result.carbs if result and not result.error else '' }}">
+      </div>
+      <div class="form-group">
+        <label>🍬 Sugars (g)</label>
+        <input type="number" name="sugars" id="sugars" step="0.01" min="0" placeholder="e.g. 20"
+               value="{{ result.sugars if result and not result.error else '' }}">
+      </div>
+      <div class="form-group">
+        <label>🌾 Fiber (g)</label>
+        <input type="number" name="fiber" id="fiber" step="0.01" min="0" placeholder="e.g. 3.1"
+               value="{{ result.fiber if result and not result.error else '' }}">
+      </div>
+      <div class="form-group">
+        <label>💪 Proteins (g)</label>
+        <input type="number" name="protein" id="protein" step="0.01" min="0" placeholder="e.g. 8"
+               value="{{ result.protein if result and not result.error else '' }}">
+      </div>
+      <div class="form-group">
+        <label>🧂 Salt (g)</label>
+        <input type="number" name="salt" id="salt" step="0.001" min="0" placeholder="e.g. 1.2"
+               value="{{ result.salt if result and not result.error else '' }}">
+      </div>
+      <div class="form-group">
+        <label>⚗️ Number of Additives</label>
+        <input type="number" name="additives_n" id="additives_n" step="1" min="0" placeholder="e.g. 4"
+               value="{{ result.additives_n if result and not result.error else '' }}">
+      </div>
+    </div>
+    <button type="submit" class="btn-predict">🚀 Run Prediction</button>
+  </form>
+</div>
+
+<!-- ╔══ RESULTS (shown only after POST) ══╗ -->
+{% if result %}
+  {% if result.error %}
+    <div class="alert-warn" style="margin-bottom:1rem;">⚠️ Error: {{ result.error }}</div>
+  {% else %}
+
+  <!-- Ensemble verdict -->
+  <div class="ensemble-card" style="--ens-color: {{ result.ensemble_color }};">
+    <div class="ens-icon">{{ result.ensemble_icon }}</div>
+    <div class="ens-label">{{ result.ensemble }}</div>
+    <div class="ens-sub">Combined verdict from both classifiers</div>
+  </div>
+
+  <!-- Per-model cards -->
+  <div class="results-grid">
+
+    <!-- Logistic Regression card -->
+    <div class="result-card" style="--accent: {{ result.lr_color }};">
+      <div class="rc-model-name" style="color:#818cf8;">📈 Logistic Regression</div>
+      <div class="rc-verdict" style="color:{{ result.lr_color }};">
+        {{ "🏭 Processed" if result.lr_label == "Processed" else "🌿 Natural" }}
+      </div>
+      <div class="rc-conf-label">Confidence: {{ result.lr_conf }}%</div>
+      <div class="conf-bar-track">
+        <div class="conf-bar-fill" style="width:{{ result.lr_conf }}%; background:{{ result.lr_color }};"></div>
+      </div>
+      <div class="rc-stats">
+        <div class="rc-stat">Accuracy <strong>{{ result.lr_acc }}%</strong></div>
+        <div class="rc-stat">F1 <strong>{{ result.lr_f1 }}</strong></div>
+      </div>
+    </div>
+
+    <!-- Decision Tree card -->
+    <div class="result-card" style="--accent: {{ result.dt_color }};">
+      <div class="rc-model-name" style="color:#c084fc;">🌳 Decision Tree</div>
+      <div class="rc-verdict" style="color:{{ result.dt_color }};">
+        {{ "🏭 Processed" if result.dt_label == "Processed" else "🌿 Natural" }}
+      </div>
+      <div class="rc-conf-label">Confidence: {{ result.dt_conf }}%</div>
+      <div class="conf-bar-track">
+        <div class="conf-bar-fill" style="width:{{ result.dt_conf }}%; background:{{ result.dt_color }};"></div>
+      </div>
+      <div class="rc-stats">
+        <div class="rc-stat">Accuracy <strong>{{ result.dt_acc }}%</strong></div>
+        <div class="rc-stat">F1 <strong>{{ result.dt_f1 }}</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input echo -->
+  <div class="card">
+    <div class="section-title"><span>📊</span> Input Summary</div>
+    <table class="echo-table">
+      <tr>
+        <th>Energy (kJ)</th><th>Fat (g)</th><th>Sat. Fat (g)</th>
+        <th>Carbs (g)</th><th>Sugars (g)</th><th>Fiber (g)</th>
+        <th>Protein (g)</th><th>Salt (g)</th><th>Additives #</th>
+      </tr>
+      <tr>
+        <td>{{ result.energy }}</td>
+        <td>{{ result.fat }}</td>
+        <td>{{ result.sat_fat }}</td>
+        <td>{{ result.carbs }}</td>
+        <td>{{ result.sugars }}</td>
+        <td>{{ result.fiber }}</td>
+        <td>{{ result.protein }}</td>
+        <td>{{ result.salt }}</td>
+        <td>{{ result.additives_n }}</td>
+      </tr>
+    </table>
+  </div>
+
+  {% endif %}
+{% endif %}
+
+<!-- ╔══ FEATURE IMPORTANCE (always shown) ══╗ -->
+<div class="card">
+  <div class="section-title"><span>🌳</span> Decision Tree – Feature Importance</div>
+  <p style="color:#64748b; font-size:.85rem; margin-top:0;">
+    Which nutritional features drive the Processed/Natural classification the most?
+  </p>
+  {{ plot_fi | safe }}
+</div>
+
+<!-- animate confidence bars after page load -->
+<script>
+  window.addEventListener('load', () => {
+    document.querySelectorAll('.conf-bar-fill').forEach(el => {
+      const w = el.style.width;
+      el.style.width = '0';
+      setTimeout(() => el.style.width = w, 100);
+    });
+  });
+</script>
+
+{% endblock %}

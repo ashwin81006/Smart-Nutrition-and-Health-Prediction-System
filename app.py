@@ -8,6 +8,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from flask import Flask, render_template, request, session, jsonify
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
@@ -27,6 +29,13 @@ FEATURE_COLS = [
     "proteins_100g", "salt_100g", "additives_n",
     "calorie_density", "fat_ratio", "sugar_ratio", "protein_ratio",
     "is_processed",
+]
+
+# Features used specifically for processed-food prediction
+PROCESSED_FEATURE_COLS = [
+    "energy_100g", "fat_100g", "saturated_fat_100g",
+    "carbohydrates_100g", "sugars_100g", "fiber_100g",
+    "proteins_100g", "salt_100g", "additives_n",
 ]
 
 ADDITIVE_KEYWORDS = [
@@ -176,10 +185,43 @@ def load_and_train():
     report = classification_report(y_test, y_pred, target_names=le.classes_, output_dict=True)
     cm = confusion_matrix(y_test, y_pred)
     importances = model.named_steps["clf"].feature_importances_
-    return df, model, le, acc, f1, report, cm, importances, X_test, y_test, y_pred
+
+    # ── Processed-food prediction models (Logistic Regression + Decision Tree) ──
+    proc_df = df[PROCESSED_FEATURE_COLS + ["is_processed"]].dropna()
+    Xp = proc_df[PROCESSED_FEATURE_COLS].values
+    yp = proc_df["is_processed"].values
+
+    Xp_train, Xp_test, yp_train, yp_test = train_test_split(
+        Xp, yp, test_size=0.2, random_state=42, stratify=yp
+    )
+
+    # Logistic Regression pipeline
+    lr_pipeline = Pipeline([
+        ("scaler", StandardScaler()),
+        ("clf", LogisticRegression(max_iter=500, class_weight="balanced", random_state=42)),
+    ])
+    lr_pipeline.fit(Xp_train, yp_train)
+    lr_acc = accuracy_score(yp_test, lr_pipeline.predict(Xp_test))
+    lr_f1  = f1_score(yp_test, lr_pipeline.predict(Xp_test), average="weighted")
+
+    # Decision Tree pipeline
+    dt_pipeline = Pipeline([
+        ("scaler", StandardScaler()),
+        ("clf", DecisionTreeClassifier(max_depth=8, class_weight="balanced", random_state=42)),
+    ])
+    dt_pipeline.fit(Xp_train, yp_train)
+    dt_acc = accuracy_score(yp_test, dt_pipeline.predict(Xp_test))
+    dt_f1  = f1_score(yp_test, dt_pipeline.predict(Xp_test), average="weighted")
+    dt_importances = dt_pipeline.named_steps["clf"].feature_importances_
+
+    return (df, model, le, acc, f1, report, cm, importances, X_test, y_test, y_pred,
+            lr_pipeline, lr_acc, lr_f1,
+            dt_pipeline, dt_acc, dt_f1, dt_importances)
 
 # Global variables (loaded once)
-df, model, le, acc, f1, report, cm, importances, X_test, y_test, y_pred = load_and_train()
+(df, model, le, acc, f1, report, cm, importances, X_test, y_test, y_pred,
+ lr_proc_model, lr_proc_acc, lr_proc_f1,
+ dt_proc_model, dt_proc_acc, dt_proc_f1, dt_proc_importances) = load_and_train()
 all_product_names = sorted(df["product_name"].dropna().unique())
 avg_energy = df["energy_100g"].mean()
 avg_sugar = df["sugars_100g"].mean()
@@ -537,6 +579,105 @@ def model_insights():
     return render_template('model.html', acc=acc, f1=f1, n_trees=model.named_steps["clf"].n_estimators,
                            plot_fi=plot_fi, plot_cm=plot_cm, class_report=class_report,
                            plot_scatter=plot_scatter, feature_count=len(FEATURE_COLS))
+
+
+# -------------------------------------------------------
+# PROCESSED FOOD PREDICTION  (Logistic Regression + DT)
+# -------------------------------------------------------
+@app.route('/prediction', methods=['GET', 'POST'])
+def prediction():
+    result = None
+
+    # Build feature-importance bar chart for DT (always shown)
+    fi_df = pd.DataFrame({
+        "Feature": [f.replace("_100g","").replace("_"," ").title() for f in PROCESSED_FEATURE_COLS],
+        "Importance": dt_proc_importances
+    }).sort_values("Importance", ascending=True)
+
+    fig_fi = px.bar(
+        fi_df, x="Importance", y="Feature", orientation="h",
+        color="Importance",
+        color_continuous_scale=[[0,"#1e3a5f"],[0.5,"#6366f1"],[1,"#a855f7"]],
+        title="Decision Tree – Feature Importance (Processed Food Prediction)"
+    )
+    fig_fi.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(30,41,59,0.2)",
+        font_color="#f1f5f9",
+        coloraxis_showscale=False
+    )
+    plot_fi = fig_fi.to_html(full_html=False)
+
+    if request.method == 'POST':
+        try:
+            energy   = float(request.form.get('energy',   0))
+            fat      = float(request.form.get('fat',      0))
+            sat_fat  = float(request.form.get('sat_fat',  0))
+            carbs    = float(request.form.get('carbs',    0))
+            sugars   = float(request.form.get('sugars',   0))
+            fiber    = float(request.form.get('fiber',    0))
+            protein  = float(request.form.get('protein',  0))
+            salt     = float(request.form.get('salt',     0))
+            additives_n = float(request.form.get('additives_n', 0))
+
+            input_vec = np.array([[energy, fat, sat_fat, carbs, sugars,
+                                   fiber, protein, salt, additives_n]])
+
+            # ── Logistic Regression ──
+            lr_pred  = int(lr_proc_model.predict(input_vec)[0])
+            lr_proba = lr_proc_model.predict_proba(input_vec)[0]
+            lr_conf  = float(lr_proba[lr_pred]) * 100
+
+            # ── Decision Tree ──
+            dt_pred  = int(dt_proc_model.predict(input_vec)[0])
+            dt_proba = dt_proc_model.predict_proba(input_vec)[0]
+            dt_conf  = float(dt_proba[dt_pred]) * 100
+
+            # Ensemble vote
+            votes = lr_pred + dt_pred        # 0 = Natural twice, 2 = Processed twice, 1 = split
+            if votes >= 2:
+                ensemble = "Processed"
+                ensemble_icon = "🏭"
+                ensemble_color = "#ef4444"
+            elif votes == 0:
+                ensemble = "Natural / Minimally Processed"
+                ensemble_icon = "🌿"
+                ensemble_color = "#22c55e"
+            else:
+                ensemble = "Uncertain – Models Disagree"
+                ensemble_icon = "⚠️"
+                ensemble_color = "#eab308"
+
+            result = {
+                "lr_label":   "Processed" if lr_pred == 1 else "Natural",
+                "lr_conf":    round(lr_conf, 1),
+                "lr_acc":     round(lr_proc_acc * 100, 1),
+                "lr_f1":      round(lr_proc_f1, 3),
+                "lr_color":   "#ef4444" if lr_pred == 1 else "#22c55e",
+                "dt_label":   "Processed" if dt_pred == 1 else "Natural",
+                "dt_conf":    round(dt_conf, 1),
+                "dt_acc":     round(dt_proc_acc * 100, 1),
+                "dt_f1":      round(dt_proc_f1, 3),
+                "dt_color":   "#ef4444" if dt_pred == 1 else "#22c55e",
+                "ensemble":        ensemble,
+                "ensemble_icon":   ensemble_icon,
+                "ensemble_color":  ensemble_color,
+                # Input echo
+                "energy":      energy,  "fat": fat, "sat_fat": sat_fat,
+                "carbs":       carbs,   "sugars": sugars, "fiber": fiber,
+                "protein":     protein, "salt": salt, "additives_n": int(additives_n),
+            }
+        except Exception as exc:
+            result = {"error": str(exc)}
+
+    return render_template('prediction.html',
+                           plot_fi=plot_fi,
+                           result=result,
+                           lr_acc=round(lr_proc_acc*100, 1),
+                           lr_f1=round(lr_proc_f1, 3),
+                           dt_acc=round(dt_proc_acc*100, 1),
+                           dt_f1=round(dt_proc_f1, 3))
+
 
 if __name__ == '__main__':
     app.run(debug=True)
