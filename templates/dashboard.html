@@ -3,27 +3,12 @@
 <h1>🏠 Nutrition Intelligence Dashboard</h1>
 <p style="color:#64748b;">Real-time insights from {{ kpis['Total Products'] }} food products</p>
 
-<div style="display: grid; grid-template-columns: repeat(5,1fr); gap:1rem; margin-bottom:2rem;">
-    {% for label, value in kpis.items() %}
-    <div class="kpi-box">
-        <div class="kpi-value">{{ value }}</div>
-        <div class="kpi-label">{{ label }}</div>
-    </div>
-    {% endfor %}
-</div>
+
 
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap:1rem;">
     <div class="card">{{ plot1|safe }}</div>
     <div class="card">{{ plot2|safe }}</div>
     <div class="card">{{ plot3|safe }}</div>
     <div class="card">{{ plot4|safe }}</div>
-</div>
-<div class="card">{{ plot5|safe }}</div>
-<div class="card">
-    <h3>👤 What this means for you</h3>
-    <p>
-        Most foods tend to have high sugar and fat content.
-        Try focusing on fiber-rich and protein-rich foods.
-    </p>
-</div>
+</div>  
 {% endblock %}

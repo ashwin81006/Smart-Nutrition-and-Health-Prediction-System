@@ -413,61 +413,6 @@ def explorer():
                            max_energy=max_energy, plot_v1=plot_v1, plot_v2=plot_v2,
                            plot_corr=plot_corr, plot_scat=plot_scat, table_data=table_data)
 
-@app.route('/compare', methods=['GET', 'POST'])
-def compare():
-    if request.method == 'POST':
-        prod1 = request.form.get('product1')
-        prod2 = request.form.get('product2')
-        if prod1 and prod2 and prod1 in df['product_name'].values and prod2 in df['product_name'].values:
-            r1 = df[df['product_name']==prod1].iloc[0]
-            r2 = df[df['product_name']==prod2].iloc[0]
-            g1 = le.inverse_transform(model.predict(pd.DataFrame([r1[FEATURE_COLS].fillna(0)])))[0]
-            g2 = le.inverse_transform(model.predict(pd.DataFrame([r2[FEATURE_COLS].fillna(0)])))[0]
-            # Comparison metrics
-            metrics = [
-                {"metric": "Fat (g/100g)", "val1": r1["fat_100g"], "val2": r2["fat_100g"], "lower_better": True},
-                {"metric": "Sugars (g/100g)", "val1": r1["sugars_100g"], "val2": r2["sugars_100g"], "lower_better": True},
-                {"metric": "Saturated Fat (g/100g)", "val1": r1["saturated_fat_100g"], "val2": r2["saturated_fat_100g"], "lower_better": True},
-                {"metric": "Salt (g/100g)", "val1": r1["salt_100g"], "val2": r2["salt_100g"], "lower_better": True},
-                {"metric": "Fiber (g/100g)", "val1": r1["fiber_100g"], "val2": r2["fiber_100g"], "lower_better": False},
-                {"metric": "Protein (g/100g)", "val1": r1["proteins_100g"], "val2": r2["proteins_100g"], "lower_better": False},
-            ]
-            comparisons = []
-            for m in metrics:
-                if m["lower_better"]:
-                    winner = prod1 if m["val1"] < m["val2"] else (prod2 if m["val2"] < m["val1"] else "Tie")
-                else:
-                    winner = prod1 if m["val1"] > m["val2"] else (prod2 if m["val2"] > m["val1"] else "Tie")
-                comparisons.append({"Metric": m["metric"], prod1: f"{m['val1']:.1f}", prod2: f"{m['val2']:.1f}", "Winner": winner})
-            # Bar chart
-            nutrients_cmp = ["energy_100g","fat_100g","sugars_100g","fiber_100g","proteins_100g","salt_100g"]
-            labels_cmp = ["Energy","Fat","Sugars","Fiber","Protein","Salt"]
-            fig = go.Figure()
-            fig.add_trace(go.Bar(name=prod1[:25], x=labels_cmp, y=[r1[n] for n in nutrients_cmp], marker_color=color_for_grade(g1)))
-            fig.add_trace(go.Bar(name=prod2[:25], x=labels_cmp, y=[r2[n] for n in nutrients_cmp], marker_color=color_for_grade(g2)))
-            fig.update_layout(barmode="group", title="Nutrient Comparison (per 100g)",
-                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(30,41,59,0.2)", font_color="#f1f5f9")
-            plot_bar = fig.to_html(full_html=False)
-            # Radar
-            cats = ["Energy","Fat","Sat.Fat","Sugars","Fiber","Protein"]
-            maxs = [3992,100,50,100,30,100]
-            cols_r = ["energy_100g","fat_100g","saturated_fat_100g","sugars_100g","fiber_100g","proteins_100g"]
-            fig_radar = go.Figure()
-            for row, grade, name in [(r1,g1,prod1),(r2,g2,prod2)]:
-                pcts = [row[c]/m*100 for c,m in zip(cols_r,maxs)]
-                fig_radar.add_trace(go.Scatterpolar(r=pcts+[pcts[0]], theta=cats+[cats[0]],
-                                                    fill="toself", name=name[:25],
-                                                    fillcolor=hex_to_rgba(color_for_grade(grade), alpha=0.2),
-                                                    line_color=color_for_grade(grade)))
-            fig_radar.update_layout(polar=dict(bgcolor="rgba(30,41,59,0.5)", radialaxis=dict(visible=True, range=[0,100]),
-                                               angularaxis=dict(color="#94a3b8")),
-                                    title="Radar Overlay", paper_bgcolor="rgba(0,0,0,0)", font_color="#f1f5f9")
-            plot_radar = fig_radar.to_html(full_html=False)
-            return render_template('compare.html', product_names=all_product_names, result=True,
-                                   prod1=prod1, prod2=prod2, g1=g1, g2=g2, comparisons=comparisons,
-                                   plot_bar=plot_bar, plot_radar=plot_radar, grade_labels=GRADE_LABELS)
-    return render_template('compare.html', product_names=all_product_names, result=False)
-
 
 from statsmodels.tsa.arima.model import ARIMA
 

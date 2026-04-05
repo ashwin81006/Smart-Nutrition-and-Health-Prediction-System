@@ -37,9 +37,15 @@
                     <input type="number" step="any" name="protein" placeholder="Protein (g/100g)" required>
                     <input type="number" step="any" name="salt" placeholder="Salt (g/100g)" required>
                     <input type="number" name="additives_n" placeholder="Number of additives" required>
-                    <select name="is_processed">
-                        <option>No</option>
-                        <option>Yes</option>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <label for="is_processed" style="font-weight: 600;">
+                        ⚙️ Processed Food?
+                    </label><br>
+
+                    <select name="is_processed" id="is_processed" style="margin-top: 0.3rem;">
+                        <option value="0">No (Natural)</option>
+                        <option value="1">Yes (Processed)</option>
                     </select>
                 </div>
                 <textarea name="ingr_text"
